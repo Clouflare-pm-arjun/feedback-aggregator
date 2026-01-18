@@ -1,0 +1,334 @@
+openapi: 3.0.3
+info:
+  title: Feedback Aggregator API
+  description: |
+    API for ingesting and retrieving feedback from various sources including:
+    - Customer Support Tickets
+    - Discord messages
+    - GitHub issues
+    - Email
+    - X/Twitter mentions
+    - Community forums
+  version: 1.0.0
+  contact:
+    name: Feedback Aggregator Service
+
+servers:
+  - url: https://feedback-aggregator.{account}.workers.dev
+    description: Production server
+  - url: http://localhost:8787
+    description: Local development server
+
+tags:
+  - name: Feedback
+    description: Feedback ingestion and retrieval operations
+  - name: Health
+    description: Health check endpoints
+
+paths:
+  /feedback:
+    get:
+      tags:
+        - Feedback
+      summary: Retrieve feedback
+      description: Get feedback entries with optional filtering by source, status, and pagination
+      operationId: getFeedback
+      parameters:
+        - name: source
+          in: query
+          description: Filter by feedback source
+          required: false
+          schema:
+            type: string
+            enum: [support, discord, github, email, twitter, forum]
+        - name: status
+          in: query
+          description: Filter by processing status
+          required: false
+          schema:
+            type: string
+            enum: [pending, processing, processed]
+        - name: limit
+          in: query
+          description: Maximum number of results to return
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+        - name: offset
+          in: query
+          description: Pagination offset
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FeedbackListResponse'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    post:
+      tags:
+        - Feedback
+      summary: Submit feedback
+      description: Submit new feedback from any source for processing
+      operationId: submitFeedback
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FeedbackInput'
+            examples:
+              support_ticket:
+                summary: Customer Support Ticket
+                value:
+                  source: support
+                  source_id: TICKET-12345
+                  title: Slow API response times
+                  content: We are experiencing very slow response times from the API, especially during peak hours.
+                  author: john.doe@company.com
+                  author_email: john.doe@company.com
+                  metadata:
+                    priority: high
+                    category: performance
+                    tags: [api, performance]
+              discord_message:
+                summary: Discord Message
+                value:
+                  source: discord
+                  source_id: discord-msg-789
+                  content: Hey team! Love the new update but I noticed the search feature is a bit slow.
+                  author: DiscordUser#1234
+                  metadata:
+                    channel: general
+                    server: community
+              github_issue:
+                summary: GitHub Issue
+                value:
+                  source: github
+                  source_id: github-issue-456
+                  title: Memory leak in worker initialization
+                  content: We have identified a memory leak that occurs during worker initialization.
+                  author: github-user-1
+                  author_email: dev@example.com
+                  metadata:
+                    repo: cloudflare/workers
+                    issue_number: 456
+                    labels: [bug, memory]
+      responses:
+        '201':
+          description: Feedback successfully stored
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FeedbackSubmitResponse'
+        '400':
+          description: Invalid request data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /health:
+    get:
+      tags:
+        - Health
+      summary: Health check
+      description: Check if the service is running
+      operationId: healthCheck
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+
+  /docs:
+    get:
+      tags:
+        - Documentation
+      summary: API Documentation
+      description: Swagger UI for API documentation
+      operationId: getDocs
+      responses:
+        '200':
+          description: Swagger UI HTML page
+          content:
+            text/html:
+              schema:
+                type: string
+
+components:
+  schemas:
+    Feedback:
+      type: object
+      required:
+        - id
+        - source
+        - content
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+          description: Unique feedback identifier
+          example: fb-1234567890-abc123
+        source:
+          type: string
+          enum: [support, discord, github, email, twitter, forum]
+          description: Source system where feedback originated
+        source_id:
+          type: string
+          description: Original ID from the source system
+          example: TICKET-12345
+        title:
+          type: string
+          description: Feedback title or subject
+          example: Slow API response times
+        content:
+          type: string
+          description: Feedback content
+          example: We are experiencing very slow response times from the API
+        author:
+          type: string
+          description: Username or identifier of the feedback author
+          example: john.doe@company.com
+        author_email:
+          type: string
+          format: email
+          description: Email address of the feedback author
+          example: john.doe@company.com
+        status:
+          type: string
+          enum: [pending, processing, processed]
+          default: pending
+          description: Processing status of the feedback
+        metadata:
+          type: object
+          description: Source-specific metadata
+          additionalProperties: true
+          example:
+            priority: high
+            category: performance
+            tags: [api, performance]
+        created_at:
+          type: integer
+          description: Unix timestamp when feedback was created
+          example: 1704067200
+        updated_at:
+          type: integer
+          description: Unix timestamp when feedback was last updated
+          example: 1704067200
+
+    FeedbackInput:
+      type: object
+      required:
+        - source
+        - content
+      properties:
+        id:
+          type: string
+          description: Optional custom ID. If not provided, one will be generated
+        source:
+          type: string
+          enum: [support, discord, github, email, twitter, forum]
+          description: Source system
+        source_id:
+          type: string
+          description: Original ID from the source system
+        title:
+          type: string
+          description: Feedback title or subject
+        content:
+          type: string
+          description: Feedback content
+        author:
+          type: string
+          description: Username or identifier
+        author_email:
+          type: string
+          format: email
+          description: Email address
+        status:
+          type: string
+          enum: [pending, processing, processed]
+          default: pending
+        metadata:
+          type: object
+          description: Source-specific metadata
+          additionalProperties: true
+        created_at:
+          type: integer
+          description: Unix timestamp (optional, defaults to current time)
+        updated_at:
+          type: integer
+          description: Unix timestamp (optional, defaults to current time)
+
+    FeedbackListResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Feedback'
+        count:
+          type: integer
+          description: Number of feedback items returned
+          example: 10
+
+    FeedbackSubmitResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        id:
+          type: string
+          description: ID of the stored feedback
+          example: fb-1234567890-abc123
+        message:
+          type: string
+          example: Feedback stored successfully. In production, this would be sent to FEEDBACKS-TO-PROCESS queue.
+
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: ok
+        service:
+          type: string
+          example: feedback-aggregator
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+          description: Error message
+        details:
+          type: string
+          description: Additional error details
